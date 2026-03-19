@@ -21,7 +21,7 @@ export default async function handler(req, res) {
     body: JSON.stringify({
       parent: { database_id: databaseId },
       properties: {
-        Name: { title: [{ text: { content: title } }] },
+'名前': { title: [{ text: { content: title } }] },
         クライアント名: { rich_text: [{ text: { content: client } }] },
         MTG日: { date: { start: date } },
       },
