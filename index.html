@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -453,34 +452,7 @@ textarea {
       <div class="status" id="sheet-status" style="margin-top:12px;"></div>
     </div>
 
-    <div class="settings-section">
-      <div class="settings-title">OpenAI</div>
-      <div class="field">
-        <label class="label">OpenAI API キー</label>
-        <div class="api-key-row">
-          <input type="password" id="openai-api-key" placeholder="sk-...">
-          <button class="toggle-btn" onclick="toggleKey('openai-api-key', this)">表示</button>
-        </div>
-        <div class="hint" style="margin-top:6px;">platform.openai.com → API keys</div>
-      </div>
-    </div>
 
-    <div class="settings-section">
-      <div class="settings-title">Notion</div>
-      <div class="field">
-        <label class="label">Notion API キー（Internal Integration Token）</label>
-        <div class="api-key-row">
-          <input type="password" id="notion-api-key" placeholder="secret_...">
-          <button class="toggle-btn" onclick="toggleKey('notion-api-key', this)">表示</button>
-        </div>
-        <div class="hint" style="margin-top:6px;">notion.so/my-integrations → 新しいインテグレーション作成</div>
-      </div>
-      <div class="field">
-        <label class="label">データベース ID</label>
-        <input type="text" id="notion-db-id" placeholder="32桁の英数字">
-        <div class="hint" style="margin-top:6px;">議事録を保存するNotionデータベースのURL末尾の32文字</div>
-      </div>
-    </div>
 
     <button class="btn" onclick="saveSettings()">設定を保存</button>
     <div class="status" id="settings-status" style="margin-top:12px;"></div>
@@ -499,23 +471,14 @@ textarea {
 // ======== 設定管理 ========
 const KEYS = {
   clientList: 'mtg_client_list',
-  openaiApiKey: 'mtg_openai_api_key',
-  notionApiKey: 'mtg_notion_api_key',
-  notionDbId: 'mtg_notion_db_id',
 };
 
 function loadSettings() {
-  document.getElementById('openai-api-key').value = localStorage.getItem(KEYS.openaiApiKey) || '';
-  document.getElementById('notion-api-key').value = localStorage.getItem(KEYS.notionApiKey) || '';
-  document.getElementById('notion-db-id').value = localStorage.getItem(KEYS.notionDbId) || '';
   document.getElementById('client-list').value = localStorage.getItem(KEYS.clientList) || '';
 }
 
 function saveSettings() {
   localStorage.setItem(KEYS.clientList, document.getElementById('client-list').value);
-  localStorage.setItem(KEYS.openaiApiKey, document.getElementById('openai-api-key').value.trim());
-  localStorage.setItem(KEYS.notionApiKey, document.getElementById('notion-api-key').value.trim());
-  localStorage.setItem(KEYS.notionDbId, document.getElementById('notion-db-id').value.trim());
   showStatus('settings-status', 'success', '設定を保存しました。');
   applyClientList();
 }
