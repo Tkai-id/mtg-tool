@@ -509,9 +509,25 @@ function setToday() {
 // ======== クライアントリスト反映 ========
 let allClients = [];
 
+async function loadClientsFromServer() {
+  try {
+    const res = await fetch('/api/clients');
+    const data = await res.json();
+    if (data.clients && data.clients.length > 0) {
+      allClients = data.clients;
+      document.getElementById('client-search').placeholder = '社名を入力して検索...';
+      return true;
+    }
+  } catch (e) {}
+  return false;
+}
+
 function applyClientList() {
   const raw = localStorage.getItem(KEYS.clientList) || '';
-  allClients = raw.split('\n').map(s => s.trim()).filter(s => s.length > 0);
+  const localClients = raw.split('\n').map(s => s.trim()).filter(s => s.length > 0);
+  if (localClients.length > 0) {
+    allClients = localClients;
+  }
 
   if (allClients.length === 0) {
     document.getElementById('client-search').placeholder = '設定からクライアントリストを入力してください';
@@ -579,7 +595,9 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   setToday();
   loadSettings();
-  applyClientList();
+  loadClientsFromServer().then(ok => {
+    if (!ok) applyClientList();
+  });
 });
 
 // ======== メイン処理 ========
