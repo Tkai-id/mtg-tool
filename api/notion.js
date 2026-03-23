@@ -1,7 +1,10 @@
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
-  const { notionKey, databaseId, title, client, date, content } = req.body;
+  const { title, client, date, content } = req.body;
+
+  const notionKey = process.env.NOTION_API_KEY;
+  const databaseId = process.env.NOTION_DB_ID;
 
   const paragraphs = content.split('\n').map(line => ({
     object: 'block',
@@ -21,7 +24,7 @@ export default async function handler(req, res) {
     body: JSON.stringify({
       parent: { database_id: databaseId },
       properties: {
-'名前': { title: [{ text: { content: title } }] },
+        '名前': { title: [{ text: { content: title } }] },
         クライアント名: { rich_text: [{ text: { content: client } }] },
         MTG日: { date: { start: date } },
       },
