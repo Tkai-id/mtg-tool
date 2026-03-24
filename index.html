@@ -379,6 +379,7 @@ textarea {
 
   <div class="tabs">
     <button class="tab active" onclick="switchTab('form')">議事録送付</button>
+    <button class="tab" onclick="switchTab('summary')">月次サマリー</button>
     <button class="tab" onclick="switchTab('settings')">設定</button>
   </div>
 
@@ -432,6 +433,46 @@ textarea {
       </div>
       <div class="result-body" id="result-body"></div>
       <a href="#" class="result-link" id="result-link" target="_blank">
+        Notionで開く →
+      </a>
+    </div>
+
+  </div>
+
+  <!-- 月次サマリーパネル -->
+  <div class="panel" id="panel-summary">
+
+    <div class="field">
+      <label class="label">対象月</label>
+      <input type="month" id="summary-month">
+    </div>
+
+    <button class="btn" id="summary-btn" onclick="handleSummary()">月次サマリーを生成してNotionに保存する →</button>
+
+    <div class="progress" id="summary-progress" style="display:none;">
+      <div class="progress-step" id="sum-step-fetch">
+        <span class="step-icon">○</span>
+        Notionから議事録を取得中...
+      </div>
+      <div class="progress-step" id="sum-step-gpt">
+        <span class="step-icon">○</span>
+        GPT-4oで横断要約中...
+      </div>
+      <div class="progress-step" id="sum-step-save">
+        <span class="step-icon">○</span>
+        Notionに保存中...
+      </div>
+    </div>
+
+    <div class="status" id="summary-status"></div>
+
+    <div class="result-card" id="summary-result-card">
+      <div class="result-header">
+        <div class="result-title" id="summary-result-title"></div>
+        <div class="result-meta" id="summary-result-meta"></div>
+      </div>
+      <div class="result-body" id="summary-result-body"></div>
+      <a href="#" class="result-link" id="summary-result-link" target="_blank">
         Notionで開く →
       </a>
     </div>
@@ -594,6 +635,10 @@ document.addEventListener('DOMContentLoaded', () => {
     cc.textContent = ta.value.length.toLocaleString() + ' 文字';
   });
   setToday();
+  // 月次サマリーの対象月を当月に設定
+  const now = new Date();
+  const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  document.getElementById('summary-month').value = ym;
   loadSettings();
   loadClientsFromServer().then(ok => {
     if (!ok) applyClientList();
@@ -746,6 +791,66 @@ async function handleSubmit() {
   } finally {
     btn.disabled = false;
     btn.textContent = '要約してNotionに保存する →';
+  }
+}
+
+// ======== 月次サマリー処理 ========
+async function handleSummary() {
+  const monthVal = document.getElementById('summary-month').value;
+  if (!monthVal) {
+    showStatus('summary-status', 'error', '対象月を選択してください。');
+    return;
+  }
+
+  const [year, month] = monthVal.split('-').map(Number);
+  const btn = document.getElementById('summary-btn');
+  btn.disabled = true;
+  btn.textContent = '処理中...';
+  document.getElementById('summary-status').style.display = 'none';
+  document.getElementById('summary-result-card').style.display = 'none';
+
+  const progress = document.getElementById('summary-progress');
+  progress.style.display = 'block';
+  setStep('sum-step-fetch', 'doing', '<span class="spinner"></span>', 'Notionから議事録を取得中...');
+  setStep('sum-step-gpt', 'wait', '○', 'GPT-4oで横断要約（待機中）');
+  setStep('sum-step-save', 'wait', '○', 'Notionに保存（待機中）');
+
+  try {
+    setStep('sum-step-fetch', 'doing', '<span class="spinner"></span>', 'Notionから議事録を取得・要約中...');
+
+    const res = await fetch('/api/summary', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ year, month })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) throw new Error(data.message || res.status);
+
+    if (data.count === 0) {
+      setStep('sum-step-fetch', 'done', '✓', '取得完了');
+      showStatus('summary-status', 'warn', `${year}年${month}月の議事録が見つかりませんでした。`);
+      return;
+    }
+
+    setStep('sum-step-fetch', 'done', '✓', `${data.count}社の議事録を取得完了`);
+    setStep('sum-step-gpt', 'done', '✓', 'GPT-4oで横断要約完了');
+    setStep('sum-step-save', 'done', '✓', 'Notionに保存完了');
+
+    showStatus('summary-status', 'success', `${year}年${month}月のサマリーをNotionに保存しました。（${data.count}社分）`);
+
+    document.getElementById('summary-result-title').textContent = `${year}年${month}月 月次サマリー`;
+    document.getElementById('summary-result-meta').textContent = `${data.count}社`;
+    document.getElementById('summary-result-body').textContent = data.summary;
+    document.getElementById('summary-result-link').href = data.notionUrl;
+    document.getElementById('summary-result-card').style.display = 'block';
+
+  } catch (e) {
+    showStatus('summary-status', 'error', e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '月次サマリーを生成してNotionに保存する →';
   }
 }
 
