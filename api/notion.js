@@ -2,35 +2,47 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
   const { title, client, date, content, transcript } = req.body;
-
   const notionKey = process.env.NOTION_API_KEY;
   const databaseId = process.env.NOTION_DB_ID;
 
-  const summaryParagraphs = content.split('\n').map(line => ({
-    object: 'block',
-    type: 'paragraph',
-    paragraph: {
-      rich_text: [{ type: 'text', text: { content: line } }]
+  // 2000文字以内に分割する関数
+  function toBlocks(text) {
+    const lines = text.split('\n');
+    const blocks = [];
+    for (const line of lines) {
+      if (line.length === 0) {
+        blocks.push({ object: 'block', type: 'paragraph', paragraph: { rich_text: [] } });
+        continue;
+      }
+      // 2000文字を超える行は分割
+      let remaining = line;
+      while (remaining.length > 0) {
+        const chunk = remaining.slice(0, 1999);
+        remaining = remaining.slice(1999);
+        blocks.push({
+          object: 'block',
+          type: 'paragraph',
+          paragraph: {
+            rich_text: [{ type: 'text', text: { content: chunk } }]
+          }
+        });
+      }
     }
-  }));
+    return blocks;
+  }
 
-  // 文字起こしを折りたたみブロックに
-  const transcriptLines = transcript.split('\n').map(line => ({
-    object: 'block',
-    type: 'paragraph',
-    paragraph: {
-      rich_text: [{ type: 'text', text: { content: line } }]
-    }
-  }));
+  const summaryBlocks = toBlocks(content);
+  const transcriptBlocks = toBlocks(transcript);
 
+  // Notionは1リクエストで最大100ブロックまで
   const children = [
-    ...summaryParagraphs,
+    ...summaryBlocks.slice(0, 90),
     {
       object: 'block',
       type: 'toggle',
       toggle: {
         rich_text: [{ type: 'text', text: { content: '▼ 元の文字起こし' } }],
-        children: transcriptLines.slice(0, 100)
+        children: transcriptBlocks.slice(0, 90)
       }
     }
   ];
