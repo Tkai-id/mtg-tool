@@ -5,7 +5,6 @@ export default async function handler(req, res) {
   const notionKey = process.env.NOTION_API_KEY;
   const databaseId = process.env.NOTION_DB_ID;
 
-  // 2000文字以内に分割する関数
   function toBlocks(text) {
     const lines = text.split('\n');
     const blocks = [];
@@ -14,7 +13,6 @@ export default async function handler(req, res) {
         blocks.push({ object: 'block', type: 'paragraph', paragraph: { rich_text: [] } });
         continue;
       }
-      // 2000文字を超える行は分割
       let remaining = line;
       while (remaining.length > 0) {
         const chunk = remaining.slice(0, 1999);
@@ -31,22 +29,19 @@ export default async function handler(req, res) {
     return blocks;
   }
 
+  // チャンクに分割（100ブロックずつ）
+  function chunkArray(arr, size) {
+    const chunks = [];
+    for (let i = 0; i < arr.length; i += size) {
+      chunks.push(arr.slice(i, i + size));
+    }
+    return chunks;
+  }
+
   const summaryBlocks = toBlocks(content);
   const transcriptBlocks = toBlocks(transcript);
 
-  // Notionは1リクエストで最大100ブロックまで
-  const children = [
-    ...summaryBlocks.slice(0, 90),
-    {
-      object: 'block',
-      type: 'toggle',
-      toggle: {
-        rich_text: [{ type: 'text', text: { content: '▼ 元の文字起こし' } }],
-        children: transcriptBlocks.slice(0, 90)
-      }
-    }
-  ];
-
+  // まずページを作成（要約のみ）
   const response = await fetch('https://api.notion.com/v1/pages', {
     method: 'POST',
     headers: {
@@ -61,11 +56,74 @@ export default async function handler(req, res) {
         'クライアント名': { rich_text: [{ text: { content: client } }] },
         'MTG日': { date: { start: date } },
       },
-      children,
+      children: summaryBlocks.slice(0, 99),
     })
   });
 
-  const data = await response.json();
-  if (!response.ok) return res.status(response.status).json(data);
-  res.status(200).json(data);
+  const pageData = await response.json();
+  if (!response.ok) return res.status(response.status).json(pageData);
+
+  const pageId = pageData.id;
+
+  // 要約の残りを追記
+  const remainingSummary = summaryBlocks.slice(99);
+  for (const chunk of chunkArray(remainingSummary, 99)) {
+    await fetch(`https://api.notion.com/v1/blocks/${pageId}/children`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${notionKey}`,
+        'Notion-Version': '2022-06-28',
+      },
+      body: JSON.stringify({ children: chunk })
+    });
+  }
+
+  // 文字起こしのトグルヘッダーを追記
+  await fetch(`https://api.notion.com/v1/blocks/${pageId}/children`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${notionKey}`,
+      'Notion-Version': '2022-06-28',
+    },
+    body: JSON.stringify({
+      children: [{
+        object: 'block',
+        type: 'toggle',
+        toggle: {
+          rich_text: [{ type: 'text', text: { content: '▼ 元の文字起こし' } }],
+          children: transcriptBlocks.slice(0, 99)
+        }
+      }]
+    })
+  });
+
+  // 文字起こしの残りをトグル内に追記
+  // トグルブロックのIDを取得
+  const blocksRes = await fetch(`https://api.notion.com/v1/blocks/${pageId}/children`, {
+    headers: {
+      'Authorization': `Bearer ${notionKey}`,
+      'Notion-Version': '2022-06-28',
+    }
+  });
+  const blocksData = await blocksRes.json();
+  const toggleBlock = blocksData.results.find(b => b.type === 'toggle');
+
+  if (toggleBlock && transcriptBlocks.length > 99) {
+    const remainingTranscript = transcriptBlocks.slice(99);
+    for (const chunk of chunkArray(remainingTranscript, 99)) {
+      await fetch(`https://api.notion.com/v1/blocks/${toggleBlock.id}/children`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${notionKey}`,
+          'Notion-Version': '2022-06-28',
+        },
+        body: JSON.stringify({ children: chunk })
+      });
+    }
+  }
+
+  res.status(200).json(pageData);
 }
