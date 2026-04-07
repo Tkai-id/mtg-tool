@@ -109,7 +109,6 @@ export default async function handler(req, res) {
 
 では、以下の会話ログを要約してください。
 
-`;
 ${transcript}`;
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
