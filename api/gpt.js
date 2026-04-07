@@ -107,8 +107,6 @@ export default async function handler(req, res) {
 ・推測は禁止
 ・事実のみ記載
 
-では、以下の会話ログを要約してください。
-
 ${transcript}`;
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
