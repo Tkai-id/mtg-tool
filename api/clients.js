@@ -1,13 +1,16 @@
 export default async function handler(req, res) {
   try {
-    const gasUrl = process.env.GAS_CLIENT_URL;
+    var gasUrl = process.env.GAS_CLIENT_URL;
+    var gasSecret = process.env.GAS_SECRET;
 
-    if (!gasUrl) {
-      return res.status(500).json({ error: "GAS_CLIENT_URL is not set" });
+    if (!gasUrl || !gasSecret) {
+      return res.status(500).json({ error: "Environment variables not set" });
     }
 
-    const response = await fetch(gasUrl, { redirect: "follow" });
-    const data = await response.json();
+    var response = await fetch(gasUrl + "?key=" + gasSecret, {
+      redirect: "follow"
+    });
+    var data = await response.json();
 
     res.setHeader("Cache-Control", "s-maxage=300, stale-while-revalidate");
     return res.status(200).json({ clients: data.clients });
