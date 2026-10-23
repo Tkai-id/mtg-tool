@@ -370,6 +370,15 @@ textarea {
 </style>
 </head>
 <body>
+<div id="login-gate" style="position:fixed;inset:0;background:#111;z-index:9999;display:none;align-items:center;justify-content:center;">
+  <form id="login-form" style="background:#1c1c1c;padding:32px;border-radius:12px;width:320px;">
+    <div style="font-size:14px;color:#aaa;margin-bottom:6px;">CS Tool</div>
+    <div style="font-size:18px;font-weight:600;color:#fff;margin-bottom:20px;">合言葉を入力（このブラウザでは初回のみ）</div>
+    <input id="login-password" type="password" autocomplete="current-password" style="width:100%;box-sizing:border-box;margin-bottom:12px;" />
+    <button type="submit" style="width:100%;">ログイン</button>
+    <div id="login-error" style="color:#f66;font-size:13px;margin-top:10px;display:none;">合言葉が違います</div>
+  </form>
+</div>
 <div class="layout">
 
   <div class="header">
@@ -380,7 +389,6 @@ textarea {
   <div class="tabs">
     <button class="tab active" onclick="switchTab('form')">議事録送付</button>
     <button class="tab" onclick="switchTab('summary')">月次サマリー</button>
-    <button class="tab" onclick="switchTab('settings')">設定</button>
   </div>
 
   <!-- フォームパネル -->
@@ -479,56 +487,39 @@ textarea {
 
   </div>
 
-  <!-- 設定パネル -->
-  <div class="panel" id="panel-settings">
-
-    <div class="settings-section">
-      <div class="settings-title">クライアントリスト</div>
-      <div class="field">
-        <label class="label">クライアント名（1行に1社）</label>
-        <textarea id="client-list" style="min-height:200px; font-size:13px;" placeholder="株式会社〇〇&#10;株式会社△△&#10;株式会社□□"></textarea>
-        <div class="hint" style="margin-top:6px;">スプシのB列をコピペしてください。1行1社で入力すればドロップダウンに反映されます。</div>
-      </div>
-      <button class="btn btn-secondary" onclick="applyClientList()">リストを反映する</button>
-      <div class="status" id="sheet-status" style="margin-top:12px;"></div>
-    </div>
-
-
-
-    <button class="btn" onclick="saveSettings()">設定を保存</button>
-    <div class="status" id="settings-status" style="margin-top:12px;"></div>
-
-    <div class="divider"></div>
-    <div style="font-size:12px; color:var(--text-muted); line-height:1.8;">
-      すべての設定はブラウザのlocalStorageに保存されます。<br>
-      外部サーバーには送信されません。
-    </div>
-
-  </div>
 
 </div>
 
 <script>
-// ======== 設定管理 ========
-const KEYS = {
-  clientList: 'mtg_client_list',
-};
-
-function loadSettings() {
-  document.getElementById('client-list').value = localStorage.getItem(KEYS.clientList) || '';
+// ======== 認証（合言葉はこのブラウザに保存され、次回以降は入力不要） ========
+const PW_KEY = 'mtg_app_password';
+function getPassword() { return localStorage.getItem(PW_KEY) || ''; }
+function showLogin(err) {
+  document.getElementById('login-gate').style.display = 'flex';
+  document.getElementById('login-error').style.display = err ? 'block' : 'none';
 }
-
-function saveSettings() {
-  localStorage.setItem(KEYS.clientList, document.getElementById('client-list').value);
-  showStatus('settings-status', 'success', '設定を保存しました。');
-  applyClientList();
+async function apiFetch(url, opts = {}) {
+  opts.headers = Object.assign({}, opts.headers || {}, { 'x-app-password': getPassword() });
+  const res = await fetch(url, opts);
+  if (res.status === 401) { localStorage.removeItem(PW_KEY); showLogin(true); }
+  return res;
 }
-
-function toggleKey(id, btn) {
-  const el = document.getElementById(id);
-  if (el.type === 'password') { el.type = 'text'; btn.textContent = '非表示'; }
-  else { el.type = 'password'; btn.textContent = '表示'; }
+async function tryLogin(pw) {
+  const res = await fetch('/api/auth', { method: 'POST', headers: { 'x-app-password': pw } });
+  if (res.ok) { localStorage.setItem(PW_KEY, pw); document.getElementById('login-gate').style.display = 'none'; return true; }
+  localStorage.removeItem(PW_KEY); showLogin(!!pw); return false;
 }
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('login-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const ok = await tryLogin(document.getElementById('login-password').value);
+    if (ok) loadClientsFromServer().then(r => { if (!r) applyClientList(); });
+  });
+  if (getPassword()) tryLogin(getPassword()); else showLogin(false);
+});
+
+// 旧バージョンでブラウザに保存されたクライアントリストを消去
+localStorage.removeItem('mtg_client_list');
 
 // ======== タブ切替 ========
 function switchTab(name) {
@@ -552,7 +543,7 @@ let allClients = [];
 
 async function loadClientsFromServer() {
   try {
-    const res = await fetch('/api/clients');
+    const res = await apiFetch('/api/clients');
     const data = await res.json();
     if (data.clients && data.clients.length > 0) {
       allClients = data.clients;
@@ -564,14 +555,8 @@ async function loadClientsFromServer() {
 }
 
 function applyClientList() {
-  const raw = localStorage.getItem(KEYS.clientList) || '';
-  const localClients = raw.split('\n').map(s => s.trim()).filter(s => s.length > 0);
-  if (localClients.length > 0) {
-    allClients = localClients;
-  }
-
   if (allClients.length === 0) {
-    document.getElementById('client-search').placeholder = '設定からクライアントリストを入力してください';
+    document.getElementById('client-search').placeholder = 'クライアントリストを取得できませんでした';
     return;
   }
 
@@ -639,7 +624,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const now = new Date();
   const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   document.getElementById('summary-month').value = ym;
-  loadSettings();
   loadClientsFromServer().then(ok => {
     if (!ok) applyClientList();
   });
@@ -726,7 +710,7 @@ async function handleSubmit() {
 
   try {
     // ---- STEP 1: GPT-4o で要約 ----
-    const gptRes = await fetch('/api/gpt', {
+    const gptRes = await apiFetch('/api/gpt', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ transcript })
@@ -747,7 +731,7 @@ async function handleSubmit() {
     const dateStr = date;
     const pageTitle = `${client} 定例MTG ${dateStr}`;
 
-    const notionRes = await fetch('/api/notion', {
+    const notionRes = await apiFetch('/api/notion', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -819,7 +803,7 @@ async function handleSummary() {
   try {
     setStep('sum-step-fetch', 'doing', '<span class="spinner"></span>', 'Notionから議事録を取得・要約中...');
 
-    const res = await fetch('/api/summary', {
+    const res = await apiFetch('/api/summary', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ year, month })

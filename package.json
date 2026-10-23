@@ -1,0 +1,13 @@
+{
+  "name": "mtg-tool",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "24.x"
+  },
+  "scripts": {
+    "check": "node --check lib/auth.js && node --check api/auth.js && node --check api/clients.js && node --check api/gpt.js && node --check api/notion.js && node --check api/summary.js && node --check api/webhook.js",
+    "test": "node --test test/*.test.js",
+    "node-version": "node -v"
+  }
+}
