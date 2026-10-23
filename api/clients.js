@@ -1,4 +1,7 @@
+import { requirePassword } from "../lib/auth.js";
+
 export default async function handler(req, res) {
+  if (!requirePassword(req, res)) return;
   try {
     var gasUrl = process.env.GAS_CLIENT_URL;
     var gasSecret = process.env.GAS_SECRET;

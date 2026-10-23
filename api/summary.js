@@ -1,5 +1,7 @@
+import { requirePassword } from "../lib/auth.js";
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
+  if (!requirePassword(req, res)) return;
 
   const { year, month } = req.body;
   const notionKey = process.env.NOTION_API_KEY;
